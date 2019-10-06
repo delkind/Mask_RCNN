@@ -139,7 +139,7 @@ class HippocampusConfig(Config):
     DETECTION_MAX_INSTANCES = 400
 
 
-class NucleusInferenceConfig(HippocampusConfig):
+class HippocampusInferenceConfig(HippocampusConfig):
     # Set batch size to 1 to run one image at a time
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
@@ -204,8 +204,11 @@ class HippocampusDataset(utils.Dataset):
 
         # Read mask files from .png image
         mask = []
-        m = skimage.io.imread(mask_path).astype(np.bool)
-        mask.append(m)
+        m = skimage.io.imread(mask_path)
+        for i in range(1, 256):
+            instance = m == i
+            if np.any(instance):
+                mask.append(instance)
         mask = np.stack(mask, axis=-1)
         # Return mask, and array of class IDs of each instance. Since we have
         # one class ID, we return an array of ones
@@ -227,13 +230,13 @@ class HippocampusDataset(utils.Dataset):
 def train(model, dataset_dir, subset):
     """Train the model."""
     # Training dataset.
-    dataset_train = NucleusDataset()
-    dataset_train.load_nucleus(dataset_dir, subset)
+    dataset_train = HippocampusDataset(dataset_dir)
+    dataset_train.load_hippocampus(subset)
     dataset_train.prepare()
 
     # Validation dataset
-    dataset_val = NucleusDataset()
-    dataset_val.load_nucleus(dataset_dir, "val")
+    dataset_val = HippocampusDataset(dataset_dir)
+    dataset_val.load_hippocampus("val")
     dataset_val.prepare()
 
     # Image augmentation
@@ -415,9 +418,9 @@ if __name__ == '__main__':
 
     # Configurations
     if args.command == "train":
-        config = NucleusConfig()
+        config = HippocampusConfig()
     else:
-        config = NucleusInferenceConfig()
+        config = Hippo
     config.display()
 
     # Create model
