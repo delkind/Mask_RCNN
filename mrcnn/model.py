@@ -2361,6 +2361,7 @@ class MaskRCNN():
         ]
 
         if reduce_lr_on_plateau:
+            print("Reducing learning rate on plateau for {} epochs by {}", reduce_lr_tolerance, reduce_lr_factor)
             callbacks.append(keras.callbacks.ReduceLROnPlateau(monitor=monitor, factor=reduce_lr_factor,
                                                                patience=reduce_lr_tolerance))
 
