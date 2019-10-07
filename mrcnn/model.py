@@ -2150,17 +2150,18 @@ class MaskRCNN():
                                 md5_hash='a268eb855778b3df3c7506639542a6af')
         return weights_path
 
-    def compile(self, learning_rate, momentum):
+    def compile(self, learning_rate, momentum, optimizer):
         """Gets the model ready for training. Adds losses, regularization, and
         metrics. Then calls the Keras compile() function.
         """
         # Optimizer object
-        # optimizer = keras.optimizers.SGD(
-        #     lr=learning_rate, momentum=momentum,
-        #     clipnorm=self.config.GRADIENT_CLIP_NORM)
-        optimizer = keras.optimizers.Adam(
-            lr=learning_rate,
-            clipnorm=self.config.GRADIENT_CLIP_NORM)
+        if optimizer is None or optimizer == 'SGD':
+            optimizer = keras.optimizers.SGD(
+                lr=learning_rate, momentum=momentum,
+                clipnorm=self.config.GRADIENT_CLIP_NORM)
+        elif optimizer == 'Adam:':
+            optimizer = keras.optimizers.Adam(lr=learning_rate)
+
         # Add Losses
         # First, clear previously set losses to avoid duplication
         self.keras_model._losses = []
@@ -2271,13 +2272,19 @@ class MaskRCNN():
             self.config.NAME.lower(), now))
 
         # Path to save after each epoch. Include placeholders that get filled by Keras.
-        self.checkpoint_path = os.path.join(self.log_dir, "mask_rcnn_{}_*epoch*.h5".format(
+        self.checkpoint_path = os.path.join(self.log_dir, "mask_rcnn_{}_*epoch*_*loss*.h5".format(
             self.config.NAME.lower()))
         self.checkpoint_path = self.checkpoint_path.replace(
             "*epoch*", "{epoch:04d}")
+        self.checkpoint_path = self.checkpoint_path.replace(
+            "*loss*", "{loss:.4f}")
 
     def train(self, train_dataset, val_dataset, learning_rate, epochs, layers,
-              augmentation=None, custom_callbacks=None, no_augmentation_sources=None):
+              augmentation=None, custom_callbacks=None, no_augmentation_sources=None,
+              optimizer='SGD', save_best_only=False, monitor='val_loss',
+              reduce_lr_on_plateau=False,
+              reduce_lr_tolerance=0,
+              reduce_lr_factor=0.1):
         """Train the model.
         train_dataset, val_dataset: Training and validation Dataset objects.
         learning_rate: The learning rate to train with
@@ -2309,6 +2316,12 @@ class MaskRCNN():
         no_augmentation_sources: Optional. List of sources to exclude for
             augmentation. A source is string that identifies a dataset and is
             defined in the Dataset class.
+        optimizer: 'SGD' or 'Adam' or custom optimizer
+        save_best_only: save model only on improvement
+        monitor: metric to monitor (ignored if save_best_only is False)
+        reduce_lr_on_plateau: whether to reduce learning rate on plateau
+        reduce_lr_tolerance: number of epochs
+        reduce_lr_factor: factor to reduce LR by
         """
         assert self.mode == "training", "Create model in training mode."
 
@@ -2343,8 +2356,13 @@ class MaskRCNN():
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                            verbose=0, save_weights_only=True),
+                                            verbose=0, save_weights_only=True, save_best_only=save_best_only,
+                                            monitor=monitor),
         ]
+
+        if reduce_lr_on_plateau:
+            callbacks.append(keras.callbacks.ReduceLROnPlateau(monitor=monitor, factor=reduce_lr_factor,
+                                                               patience=reduce_lr_tolerance))
 
         # Add custom callbacks to the list
         if custom_callbacks:
@@ -2354,7 +2372,7 @@ class MaskRCNN():
         log("\nStarting at epoch {}. LR={}\n".format(self.epoch, learning_rate))
         log("Checkpoint Path: {}".format(self.checkpoint_path))
         self.set_trainable(layers)
-        self.compile(learning_rate, self.config.LEARNING_MOMENTUM)
+        self.compile(learning_rate, self.config.LEARNING_MOMENTUM, optimizer)
 
         # Work-around for Windows: Keras fails on Windows when using
         # multiprocessing workers. See discussion here:
