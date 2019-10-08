@@ -2356,7 +2356,7 @@ class MaskRCNN():
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
                                         histogram_freq=0, write_graph=True, write_images=False),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
-                                            verbose=0, save_weights_only=True, save_best_only=save_best_only,
+                                            verbose=1, save_weights_only=True, save_best_only=save_best_only,
                                             monitor=monitor),
         ]
 
@@ -2364,7 +2364,7 @@ class MaskRCNN():
             print("Reducing learning rate on plateau for {} epochs by {}".format(reduce_lr_tolerance,
                                                                                  reduce_lr_factor))
             callbacks.append(keras.callbacks.ReduceLROnPlateau(monitor=monitor, factor=reduce_lr_factor,
-                                                               patience=reduce_lr_tolerance))
+                                                               patience=reduce_lr_tolerance, verbose=1))
 
         print("Callbacks: ", callbacks)
 
