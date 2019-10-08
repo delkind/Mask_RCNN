@@ -2284,7 +2284,8 @@ class MaskRCNN():
               optimizer='SGD', save_best_only=False, monitor='val_loss',
               reduce_lr_on_plateau=False,
               reduce_lr_tolerance=0,
-              reduce_lr_factor=0.1):
+              reduce_lr_factor=0.1,
+              tensorboard_update_freq='epoch'):
         """Train the model.
         train_dataset, val_dataset: Training and validation Dataset objects.
         learning_rate: The learning rate to train with
@@ -2322,6 +2323,7 @@ class MaskRCNN():
         reduce_lr_on_plateau: whether to reduce learning rate on plateau
         reduce_lr_tolerance: number of epochs
         reduce_lr_factor: factor to reduce LR by
+        tensorboard_update_freq - frequency to update tensorboard ('epoch', 'batch' or number of samples)
         """
         assert self.mode == "training", "Create model in training mode."
 
@@ -2354,7 +2356,8 @@ class MaskRCNN():
         # Callbacks
         callbacks = [
             keras.callbacks.TensorBoard(log_dir=self.log_dir,
-                                        histogram_freq=0, write_graph=True, write_images=False),
+                                        histogram_freq=0, write_graph=True, write_images=False,
+                                        update_freq=tensorboard_update_freq),
             keras.callbacks.ModelCheckpoint(self.checkpoint_path,
                                             verbose=1, save_weights_only=True, save_best_only=save_best_only,
                                             monitor=monitor),
