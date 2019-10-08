@@ -2366,6 +2366,8 @@ class MaskRCNN():
             callbacks.append(keras.callbacks.ReduceLROnPlateau(monitor=monitor, factor=reduce_lr_factor,
                                                                patience=reduce_lr_tolerance))
 
+        print("Callbacks: ", callbacks)
+
         # Add custom callbacks to the list
         if custom_callbacks:
             callbacks += custom_callbacks
