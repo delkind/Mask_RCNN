@@ -174,9 +174,13 @@ def train(batch_size, iterations_per_epoch, validation_split, backbone, momentum
           tensorboard_update_freq, monitor):
     config = HippocampusConfig(batch_size, iterations_per_epoch, validation_split, backbone, momentum)
 
-    dataset_train = HippocampusDataset('images/hippocampus', validation_split)
-    dataset_train.load_hippocampus('train')
-    dataset_train.prepare()
+    dataset = HippocampusDataset('images/hippocampus', validation_split)
+    dataset.load_hippocampus('train')
+    dataset.prepare()
+
+    dataset_val = HippocampusDataset('images/hippocampus', validation_split)
+    dataset.load_hippocampus('val')
+    dataset.prepare()
 
     import mrcnn.model as modellib
 
@@ -226,7 +230,7 @@ def train(batch_size, iterations_per_epoch, validation_split, backbone, momentum
         optimizer = AdaBound(lr=1e-3, final_lr=0.1)
 
     print("Train network layers: " + layers)
-    model.train(dataset_train, dataset_val,
+    model.train(dataset, dataset_val,
                 learning_rate=learning_rate,
                 epochs=epochs,
                 augmentation=augmentation,
