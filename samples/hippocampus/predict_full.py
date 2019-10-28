@@ -1,10 +1,8 @@
 import argparse
-
-import cv2
 import itertools
 
+import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 def split_image(image_path, crop_size, border_size):
@@ -36,7 +34,7 @@ def predict_full_image(weights, image_path, crop_size, border_size, backbone='re
     crops, image = split_image(image_path, crop_size, border_size)
     model = create_model(backbone, weights)
 
-    results = [model.detect([crop[0]], verbose=0)[0] for crop in crops]
+    results = [model.detect([crop[0]], verbose=0)[0] for crop in crops[:1]]
     results = [adjust_results(border_size, coords, crop_size, image, result)
                for (crop, coords), result in zip(crops, results)]
     final_results = {k: np.concatenate([res[k] for res in results], axis=0)
@@ -129,7 +127,7 @@ def mask_image(image, boxes, masks, class_ids, class_names,
 
         y1, x1, y2, x2 = boxes[i]
         if show_bbox:
-            cv2.rectangle(masked_image, (y1, x1), (y2, x2), color, 1)
+            cv2.rectangle(masked_image, (x1, y1), (x2, y2), color, 1)
 
         # Mask
         mask, coords = masks[i]
@@ -142,7 +140,7 @@ def mask_image(image, boxes, masks, class_ids, class_names,
         contours = find_contours(padded_mask, 0.5)
         for verts in contours:
             # Subtract the padding and flip (y, x) to (x, y)
-            verts = (verts - 1).reshape(-1, 1, 2).astype(int)
+            verts = (np.fliplr(verts) - 1).reshape(-1, 1, 2).astype(int)
             cv2.polylines(masked_image[coords[0]:coords[0] + mask.shape[0], coords[1]:coords[1] + mask.shape[1], :],
                           [verts], True, color)
 
