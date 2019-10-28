@@ -34,14 +34,14 @@ def predict_full_image(weights, image_path, crop_size, border_size, backbone='re
     crops, image = split_image(image_path, crop_size, border_size)
     model = create_model(backbone, weights)
 
-    results = [model.detect([crop[0]], verbose=0)[0] for crop in crops[:1]]
+    results = [model.detect([crop[0]], verbose=0)[0] for crop in crops]
     results = [adjust_results(border_size, coords, crop_size, image, result)
                for (crop, coords), result in zip(crops, results)]
     final_results = {k: np.concatenate([res[k] for res in results], axis=0)
                      for k in results[0].keys()}
     final_results['masks'] = list(itertools.chain(*[res['masks'] for res in results]))
     return mask_image(image, final_results['rois'], final_results['masks'], final_results['class_ids'],
-                      {1: 'cell'})
+                      {1: 'cell'}, show_bbox=False)
 
 
 def adjust_results(border_size, coords, crop_size, image, result):
