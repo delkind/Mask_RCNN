@@ -22,7 +22,8 @@ def filter_rois(rois, border_size, crop_size):
     valid = list(map(lambda r: not (at_border((r[0], r[2]), border_size, crop_size) or at_border((r[1], r[3]),
                                                                                                  border_size,
                                                                                                  crop_size)), rois))
-    return np.nonzero(valid)[0]
+    # return np.nonzero(valid)[0]
+    return range(rois.shape[0])
 
 
 def at_border(r, border_size, crop_size):
@@ -48,11 +49,11 @@ def adjust_results(border_size, coords, crop_size, image, result):
     filtered_result = filter_result(result, border_size, crop_size)
     filtered_result['rois'] = np.array([a + [coords[0], coords[1], coords[0], coords[1]]
                                         for a in filtered_result['rois']])
-    filtered_result['masks'] = apply_masks(coords, filtered_result['masks'], image)
+    filtered_result['masks'] = apply_masks(coords, filtered_result['masks'])
     return filtered_result
 
 
-def apply_masks(coords, masks, image):
+def apply_masks(coords, masks):
     result = []
     for i in range(masks.shape[-1]):
         mask = masks[..., i]
