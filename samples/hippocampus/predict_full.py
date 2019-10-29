@@ -23,7 +23,7 @@ def filter_rois(rois, border_size, crop_size):
                                                                                                  border_size,
                                                                                                  crop_size)), rois))
     # return np.nonzero(valid)[0]
-    return range(rois.shape[0])
+    return range(len(rois))
 
 
 def at_border(r, border_size, crop_size):
@@ -31,18 +31,18 @@ def at_border(r, border_size, crop_size):
             r[0] > crop_size - border_size and r[1] > crop_size - border_size)
 
 
-def predict_full_image(weights, image_path, crop_size, border_size, backbone='resnet50'):
+def predict_full_image(weights, image_path, crop_size, border_size, output_image_path, backbone='resnet50'):
+    import matplotlib.pyplot as plt
     crops, image = split_image(image_path, crop_size, border_size)
     model = create_model(backbone, weights)
 
-    results = [model.detect([crop[0]], verbose=0)[0] for crop in crops]
-    results = [adjust_results(border_size, coords, crop_size, image, result)
-               for (crop, coords), result in zip(crops, results)]
-    final_results = {k: np.concatenate([res[k] for res in results], axis=0)
-                     for k in results[0].keys()}
-    final_results['masks'] = list(itertools.chain(*[res['masks'] for res in results]))
-    return mask_image(image, final_results['rois'], final_results['masks'], final_results['class_ids'],
-                      {1: 'cell'}, show_bbox=False)
+    for num, crop in enumerate(crops):
+        print("Processing crop {} out of {}...".format(num + 1, len(crops)))
+        result = model.detect([crop[0]], verbose=0)[0]
+        mask_image(crop[0], result['rois'], result['masks'], result['class_ids'],
+                   {1: 'cell'}, show_bbox=True)
+
+    cv2.imwrite(output_image_path, image)
 
 
 def adjust_results(border_size, coords, crop_size, image, result):
@@ -112,13 +112,11 @@ def mask_image(image, boxes, masks, class_ids, class_names,
     if not N:
         print("\n*** No instances to display *** \n")
     else:
-        assert boxes.shape[0] == len(masks) == class_ids.shape[0]
+        assert boxes.shape[0] == masks.shape[-1] == class_ids.shape[0]
 
-    masked_image = image.copy()
     if colors is None:
         colors = [(0, 255, 0)] * N
     for i in range(N):
-        print("Processing instance {} of {}".format(i, N))
         color = colors[i]
 
         # Bounding box
@@ -128,24 +126,22 @@ def mask_image(image, boxes, masks, class_ids, class_names,
 
         y1, x1, y2, x2 = boxes[i]
         if show_bbox:
-            cv2.rectangle(masked_image, (x1, y1), (x2, y2), color, 1)
+            cv2.rectangle(image, (x1, y1), (x2, y2), color, 1)
 
         # Mask
-        mask, coords = masks[i]
+        mask = masks[..., i]
 
         # Mask Polygon
         # Pad to ensure proper polygons for masks that touch image edges.
         padded_mask = np.zeros(
             (mask.shape[0] + 2, mask.shape[1] + 2), dtype=np.uint8)
         padded_mask[1:-1, 1:-1] = mask
+
         contours = find_contours(padded_mask, 0.5)
         for verts in contours:
             # Subtract the padding and flip (y, x) to (x, y)
             verts = (np.fliplr(verts) - 1).reshape(-1, 1, 2).astype(int)
-            cv2.polylines(masked_image[coords[0]:coords[0] + mask.shape[0], coords[1]:coords[1] + mask.shape[1], :],
-                          [verts], True, color)
-
-    return masked_image
+            cv2.polylines(image, [verts], True, color)
 
 
 if __name__ == '__main__':
@@ -153,9 +149,9 @@ if __name__ == '__main__':
         description='Mask R-CNN for cells counting and segmentation - predictions')
     parser.add_argument('--weights', required=True, action='store', help='Some help')
     parser.add_argument('--full_image', required=True, action='store', help='Some help')
+    parser.add_argument('--output_image', required=True, action='store', help='Some help')
     parser.add_argument('--crop_size', default=320, type=int, action='store', help='Some help')
     parser.add_argument('--border_size', default=20, type=int, action='store', help='Some help')
     args = parser.parse_args()
 
-    masked_image = predict_full_image(args.weights, args.full_image, args.crop_size, args.border_size)
-    cv2.imwrite("masked.png", masked_image)
+    predict_full_image(args.weights, args.full_image, args.crop_size, args.border_size, args.output_image)
