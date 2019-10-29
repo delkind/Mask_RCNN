@@ -31,7 +31,8 @@ def at_border(r, border_size, crop_size):
             r[0] > crop_size - border_size and r[1] > crop_size - border_size)
 
 
-def predict_full_image(weights, image_path, crop_size, border_size, output_image_path, backbone='resnet50'):
+def predict_full_image(weights, image_path, crop_size, border_size, output_image_path, bounding_boxes,
+                       backbone='resnet50'):
     import matplotlib.pyplot as plt
     crops, image = split_image(image_path, crop_size, border_size)
     model = create_model(backbone, weights)
@@ -40,7 +41,7 @@ def predict_full_image(weights, image_path, crop_size, border_size, output_image
         print("Processing crop {} out of {}...".format(num + 1, len(crops)))
         result = model.detect([crop[0]], verbose=0)[0]
         mask_image(crop[0], result['rois'], result['masks'], result['class_ids'],
-                   {1: 'cell'}, show_bbox=True)
+                   {1: 'cell'}, show_bbox=bounding_boxes)
 
     cv2.imwrite(output_image_path, image)
 
@@ -152,6 +153,8 @@ if __name__ == '__main__':
     parser.add_argument('--output_image', required=True, action='store', help='Some help')
     parser.add_argument('--crop_size', default=320, type=int, action='store', help='Some help')
     parser.add_argument('--border_size', default=20, type=int, action='store', help='Some help')
+    parser.add_argument('--bounding_boxes', action='store_true', help='Some help')
     args = parser.parse_args()
 
-    predict_full_image(args.weights, args.full_image, args.crop_size, args.border_size, args.output_image)
+    predict_full_image(args.weights, args.full_image, args.crop_size, args.border_size, args.output_image,
+                       args.bounding_boxes)
