@@ -3,19 +3,22 @@ import itertools
 
 import cv2
 import numpy as np
+from skimage.measure import find_contours
 
 
 def split_image(image_path, crop_size, border_size):
     image = cv2.imread(image_path)
+    return create_crops_list(border_size, crop_size, image), image
 
+
+def create_crops_list(border_size, crop_size, image):
     vert = list(range(0, image.shape[0], crop_size - 2 * border_size))
     horiz = list(range(0, image.shape[1], crop_size - 2 * border_size))
     vert = list(filter(lambda v: v + crop_size <= image.shape[0], vert)) + [image.shape[0] - crop_size]
     horiz = list(filter(lambda v: v + crop_size <= image.shape[1], horiz)) + [image.shape[1] - crop_size]
-
     crop_coords = list(itertools.product(vert, horiz))
     crops = [image[i:i + crop_size, j:j + crop_size, ...] for (i, j) in crop_coords]
-    return list(zip(crops, crop_coords)), image
+    return list(zip(crops, crop_coords))
 
 
 def filter_rois(rois, border_size, crop_size):
@@ -31,19 +34,25 @@ def at_border(r, border_size, crop_size):
             r[0] > crop_size - border_size and r[1] > crop_size - border_size)
 
 
-def predict_full_image(weights, image_path, crop_size, border_size, output_image_path, bounding_boxes,
+def predict_full_image(weights, image_path, crop_size, border_size, output_image_path, bounding_boxes, output_layer,
                        backbone='resnet50'):
-    import matplotlib.pyplot as plt
     crops, image = split_image(image_path, crop_size, border_size)
+    if output_layer:
+        mask = np.zeros_like(image)
+        mask_crops = create_crops_list(border_size, crop_size, mask)
+    else:
+        mask = image
+        mask_crops = crops
+
     model = create_model(backbone, weights)
 
     for num, crop in enumerate(crops):
-        print("Processing crop {} out of {}...".format(num + 1, len(crops)))
         result = model.detect([crop[0]], verbose=0)[0]
-        mask_image(crop[0], result['rois'], result['masks'], result['class_ids'],
+        print("Processing crop {} out of {}...".format(num + 1, len(crops)))
+        mask_image(mask_crops[num][0], result['rois'], result['masks'], result['class_ids'],
                    {1: 'cell'}, show_bbox=bounding_boxes)
 
-    cv2.imwrite(output_image_path, image)
+    cv2.imwrite(output_image_path, mask)
 
 
 def adjust_results(border_size, coords, crop_size, image, result):
@@ -106,7 +115,6 @@ def mask_image(image, boxes, masks, class_ids, class_names,
                figsize=(32, 32), ax=None,
                show_bbox=True,
                colors=None, captions=None):
-    from skimage.measure import find_contours
 
     # Number of instances
     N = boxes.shape[0]
@@ -145,6 +153,7 @@ def mask_image(image, boxes, masks, class_ids, class_names,
             cv2.polylines(image, [verts], True, color)
 
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Mask R-CNN for cells counting and segmentation - predictions')
@@ -154,7 +163,8 @@ if __name__ == '__main__':
     parser.add_argument('--crop_size', default=320, type=int, action='store', help='Some help')
     parser.add_argument('--border_size', default=20, type=int, action='store', help='Some help')
     parser.add_argument('--bounding_boxes', action='store_true', help='Some help')
+    parser.add_argument('--output_layer', action='store_true', help='Some help')
     args = parser.parse_args()
 
     predict_full_image(args.weights, args.full_image, args.crop_size, args.border_size, args.output_image,
-                       args.bounding_boxes)
+                       args.bounding_boxes, args.output_layer)
