@@ -46,13 +46,20 @@ def predict_full_image(weights, image_path, crop_size, border_size, output_image
 
     model = create_model(backbone, weights)
 
+    # result = model.detect([crops[0][0]], verbose=0)[0]
     for num, crop in enumerate(crops):
         result = model.detect([crop[0]], verbose=0)[0]
         print("Processing crop {} out of {}...".format(num + 1, len(crops)))
         mask_image(mask_crops[num][0], result['rois'], result['masks'], result['class_ids'],
                    {1: 'cell'}, show_bbox=bounding_boxes)
 
-    cv2.imwrite(output_image_path, mask)
+    if output_layer:
+        mask = cv2.cvtColor(mask, cv2.COLOR_BGR2BGRA)
+        for i in range(mask.shape[0]):
+            for j in range(mask.shape[1]):
+                if not mask[i, j, :-1].any():
+                    mask[i, j, 3] = 0
+        cv2.imwrite(output_image_path, mask)
 
 
 def adjust_results(border_size, coords, crop_size, image, result):
