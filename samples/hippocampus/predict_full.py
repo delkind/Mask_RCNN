@@ -12,13 +12,18 @@ def split_image(image_path, crop_size, border_size):
 
 
 def create_crops_list(border_size, crop_size, image):
+    crop_coords = create_crops_coords_list(image, crop_size, border_size)
+    crops = [image[i:i + crop_size, j:j + crop_size, ...] for (i, j) in crop_coords]
+    return list(zip(crops, crop_coords))
+
+
+def create_crops_coords_list(crop_size, border_size, image):
     vert = list(range(0, image.shape[0], crop_size - 2 * border_size))
     horiz = list(range(0, image.shape[1], crop_size - 2 * border_size))
     vert = list(filter(lambda v: v + crop_size <= image.shape[0], vert)) + [image.shape[0] - crop_size]
     horiz = list(filter(lambda v: v + crop_size <= image.shape[1], horiz)) + [image.shape[1] - crop_size]
     crop_coords = list(itertools.product(vert, horiz))
-    crops = [image[i:i + crop_size, j:j + crop_size, ...] for (i, j) in crop_coords]
-    return list(zip(crops, crop_coords))
+    return crop_coords
 
 
 def filter_rois(rois, border_size, crop_size):
@@ -122,7 +127,6 @@ def mask_image(image, boxes, masks, class_ids, class_names,
                figsize=(32, 32), ax=None,
                show_bbox=True,
                colors=None, captions=None):
-
     # Number of instances
     N = boxes.shape[0]
     if not N:
@@ -158,7 +162,6 @@ def mask_image(image, boxes, masks, class_ids, class_names,
             # Subtract the padding and flip (y, x) to (x, y)
             verts = (np.fliplr(verts) - 1).reshape(-1, 1, 2).astype(int)
             cv2.polylines(image, [verts], True, color)
-
 
 
 if __name__ == '__main__':

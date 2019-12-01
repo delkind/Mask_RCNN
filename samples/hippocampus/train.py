@@ -9,6 +9,9 @@ from mrcnn.config import Config
 from mrcnn import utils
 
 # Root directory of the project
+from samples.hippocampus.dataset import HippocampusDataset
+from samples.hippocampus.predict_full import create_crops_coords_list
+
 ROOT_DIR = os.path.abspath(".")
 sys.path.append(ROOT_DIR)  # To find local version of the library
 
@@ -19,7 +22,7 @@ TEST_IMAGES = [3, 9, 21, 27, 28, 29, 30]
 IMAGES = list(set(range(1, 56)) - set(TEST_IMAGES))
 
 
-class HippocampusDataset(utils.Dataset):
+class HippocampusCropsDataset(utils.Dataset):
     def __init__(self, dataset_dir, validation_split):
         super().__init__()
         self._images = dict()
@@ -56,13 +59,13 @@ class HippocampusDataset(utils.Dataset):
                 image_id=image_id,
                 path=os.path.join(self._dataset_dir, "images/{:02d}_img.png".format(image_id)))
 
-    # def load_image(self, image_id):
-    #     """Load the specified image and return a [H,W,3] Numpy array.
-    #     """
-    #     # Load image
-    #     image = skimage.io.imread(self.image_info[image_id]['path'])
-    #     image = image.reshape((*(image.shape), 1))
-    #     return image
+    def load_image(self, image_id):
+        """Load the specified image and return a [H,W,3] Numpy array.
+        """
+        # Load image
+        image = skimage.io.imread(self.image_info[image_id]['path'])
+        image = image.reshape((*(image.shape), 1))
+        return image
 
     def load_mask(self, image_id):
         """Generate instance masks for an image.
@@ -169,18 +172,15 @@ class HippocampusConfig(Config):
     DETECTION_MAX_INSTANCES = 400
 
 
-def train(batch_size, iterations_per_epoch, validation_split, backbone, momentum, default_logs_dir, weights,
+def train(image_dir, mask_dir, crop_size, batch_size, iterations_per_epoch, validation_split, backbone, momentum, default_logs_dir, weights,
           optimizer, layers, learning_rate, epochs, reduce_lr_on_plateau, reduce_lr_factor, reduce_lr_tolerance,
           tensorboard_update_freq, monitor):
     config = HippocampusConfig(batch_size, iterations_per_epoch, validation_split, backbone, momentum)
 
-    dataset = HippocampusDataset('images/hippocampus', validation_split)
-    dataset.load_hippocampus('train')
-    dataset.prepare()
+    dataset = HippocampusDataset.create(image_dir, mask_dir, validation_split, crop_size)
 
-    dataset_val = HippocampusDataset('images/hippocampus', validation_split)
-    dataset.load_hippocampus('val')
-    dataset.prepare()
+    train_subset = dataset.get_subset('train')
+    val_subset = dataset.get_subset('val')
 
     import mrcnn.model as modellib
 
@@ -230,7 +230,7 @@ def train(batch_size, iterations_per_epoch, validation_split, backbone, momentum
         optimizer = AdaBound(lr=1e-3, final_lr=0.1)
 
     print("Train network layers: " + layers)
-    model.train(dataset, dataset_val,
+    model.train(train_subset, val_subset,
                 learning_rate=learning_rate,
                 epochs=epochs,
                 augmentation=augmentation,
@@ -250,6 +250,10 @@ if __name__ == '__main__':
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         description='Mask R-CNN for cells counting and segmentation')
+
+    parser.add_argument('--image_dir', action='store', required=True)
+    parser.add_argument('--mask_dir', action='store', required=True)
+    parser.add_argument('--crop_size', action='store', default=320, type=int)
     parser.add_argument('--batch_size', default=3, type=int, action='store', help='Some help')
     parser.add_argument('--iterations_per_epoch', default=100, type=int, action='store', help='Some help')
     parser.add_argument('--validation_split', default=10, type = int, action='store', help='Some help')
@@ -267,7 +271,5 @@ if __name__ == '__main__':
     parser.add_argument('--tensorboard_update_freq', default=30, type=int, action='store', help='Some help')
     parser.add_argument('--monitor', default='loss', action='store', help='Some help')
     args = parser.parse_args()
-    train(args.batch_size, args.iterations_per_epoch, args.validation_split, args.backbone, args.momentum,
-          args.default_logs_dir, args.weights, args.optimizer, args.layers, args.learning_rate, args.epochs,
-          args.reduce_lr_on_plateau, args.reduce_lr_factor, args.reduce_lr_tolerance, args.tensorboard_update_freq,
-          args.monitor)
+
+    train(**vars(args))
