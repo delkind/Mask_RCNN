@@ -101,8 +101,9 @@ class HippocampusSubset(utils.Dataset):
 
         # Add classes. We have one class.
         # Naming the dataset nucleus, and the class nucleus
+        self.add_class("hippocampus", 0, "background")
         self.add_class("hippocampus", 1, "nucleus")
-        self.source_class_ids = {'hippocampus': 1}
+        self.source_class_ids = {'background': 0, 'hippocampus': 1}
 
         # Add images
         for image_id, _ in enumerate(self.image_ids):
