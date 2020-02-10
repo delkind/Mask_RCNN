@@ -172,12 +172,12 @@ class HippocampusConfig(Config):
     DETECTION_MAX_INSTANCES = 400
 
 
-def train(image_dir, mask_dir, crop_size, batch_size, iterations_per_epoch, validation_split, backbone, momentum, default_logs_dir, weights,
+def train(image_dir, project, crop_size, batch_size, iterations_per_epoch, validation_split, backbone, momentum, default_logs_dir, weights,
           optimizer, layers, learning_rate, epochs, reduce_lr_on_plateau, reduce_lr_factor, reduce_lr_tolerance,
           tensorboard_update_freq, monitor):
     config = HippocampusConfig(batch_size, iterations_per_epoch, validation_split, backbone, momentum)
 
-    dataset = HippocampusDataset.create(image_dir, mask_dir, validation_split, crop_size)
+    dataset = HippocampusDataset(image_dir, project, validation_split, crop_size)
 
     train_subset = dataset.get_subset('train')
     val_subset = dataset.get_subset('val')
@@ -252,7 +252,7 @@ if __name__ == '__main__':
         description='Mask R-CNN for cells counting and segmentation')
 
     parser.add_argument('--image_dir', action='store', required=True)
-    parser.add_argument('--mask_dir', action='store', required=True)
+    parser.add_argument('--project', action='store', required=True)
     parser.add_argument('--crop_size', action='store', default=320, type=int)
     parser.add_argument('--batch_size', default=3, type=int, action='store', help='Some help')
     parser.add_argument('--iterations_per_epoch', default=100, type=int, action='store', help='Some help')

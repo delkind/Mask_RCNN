@@ -1,3 +1,4 @@
+import json
 import os
 
 import cv2
@@ -27,48 +28,34 @@ def extract_components(image):
 
 
 class HippocampusDataset:
-    @staticmethod
-    def create(image_dir, mask_dir, validation_split=10, crop_size=320, border_size=0):
-        files = [f for f in os.listdir(image_dir) if os.path.isfile(os.path.join(image_dir, f))]
-        images = [os.path.join(image_dir, f) for f in files]
-        masks = [os.path.join(mask_dir, f) for f in files]
-        return HippocampusDataset(images, masks, validation_split, crop_size, border_size)
-
-    def __init__(self, images, masks, validation_split=10, crop_size=320, border_size=0):
+    def __init__(self, image_dir, json_path, validation_split=10, crop_size=320, border_size=0):
         super().__init__()
+        with open(json_path, "rt") as in_file:
+            self.project = json.load(in_file)
         self.border_size = border_size
         self.crop_size = crop_size
-        self.masks = masks
-        self.images = images
-        self.crops = []
-
-        for num, image in enumerate(self.images):
-            c = create_crops_coords_list(self.crop_size, self.border_size, skimage.io.imread(image))
-            self.crops += list(zip([num] * len(c), c))
-
-        ids = list(range(len(self.crops)))
-        self._images = dict()
-        self._images['val'] = np.random.choice(ids, len(self.crops) * validation_split // 100, replace=False).tolist()
-        ids = list(set(ids) - set(self._images['val']))
-        self._images['test'] = np.random.choice(ids, len(self.crops) * validation_split // 100, replace=False).tolist()
-        ids = list(set(ids) - set(self._images['test']))
-        self._images['train'] = ids
-        pass
+        valid_images = [k for (k, v) in self.project['_via_img_metadata'].items() if v['regions']]
+        self.images = [os.path.join(image_dir, self.project['_via_img_metadata'][x]['filename']) for x in valid_images]
+        self.masks = [self.project['_via_img_metadata'][x]['regions'] for x in valid_images]
+        ids = range(len(self.images))
+        self._subsets = dict()
+        self._subsets['val'] = np.random.choice(ids, len(ids) * validation_split // 100, replace=False).tolist()
+        ids = list(set(ids) - set(self._subsets['val']))
+        self._subsets['test'] = np.random.choice(ids, len(ids) * validation_split // 100, replace=False).tolist()
+        ids = list(set(ids) - set(self._subsets['test']))
+        self._subsets['train'] = ids
+        self.subsets = {n: HippocampusSubset(self, n) for n in ['train', 'val', 'test']}
 
     def get_subset(self, subset):
-        return HippocampusSubset(self, subset)
-
-    def get_crop(self, image_id):
-        img_index, (y, x) = self.crops[image_id]
-        self.images[img_index] = self.get_image(img_index)
-
-        return self.images[img_index][y:y + self.crop_size, x:x + self.crop_size, ...]
+        return self.subsets[subset]
 
     def get_image(self, img_index):
         if isinstance(self.images[img_index], str):
             image = skimage.io.imread(self.images[img_index])
+            if image.shape[0] != image.shape[1]:
+                image = image[:, :image.shape[0], ...]
             if len(image.shape) == 2:
-                image = image.reshape((*image.shape, 1))
+                image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
             if image.shape[-1] == 4:
                 image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
         else:
@@ -76,7 +63,7 @@ class HippocampusDataset:
 
         return image
 
-    def get_mask(self, image_id):
+    def get_mask(self, img_index):
         """Generate instance masks for an image.
        Returns:
         masks: A bool array of shape [height, width, instance count] with
@@ -84,40 +71,25 @@ class HippocampusDataset:
         class_ids: a 1D array of class IDs of the instance masks.
         """
 
-        img_index, (y, x) = self.crops[image_id]
-        if isinstance(self.masks[img_index], str):
-            if os.path.isfile(self.masks[img_index]):
-                image = skimage.io.imread(self.masks[img_index])
-                if image.shape[-1] == 4:
-                    image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
-                self.masks[img_index] = image
+        if isinstance(self.masks[img_index], list):
+            mask = []
+            shape = self.get_image(img_index).shape
+            for region in self.masks[img_index]:
+                layer = np.zeros((shape[0], shape[1]), dtype=np.int8)
+                polygon = np.array([[[x, y] for (x, y) in (zip(region['shape_attributes']['all_points_x'],
+                                                               region['shape_attributes']['all_points_y']))]])
+                cv2.fillPoly(layer, polygon, 255)
+                mask += [layer != 0]
+            if mask:
+                mask = np.stack(mask, axis=-1)
             else:
-                self.masks[img_index] = np.zeros_like(self.get_image(img_index))
-
-        raw_mask = self.masks[img_index][y:y + self.crop_size, x:x + self.crop_size, ...].copy()
-        m = extract_components(raw_mask)
-        mask = []
-
-        for i in range(m.max()):
-            instance = m == (i + 1)
-            if np.any(instance):
-                mask.append(instance)
-
-        if not mask:
-            mask += [m != 0]
-
-        mask = np.stack(mask, axis=-1)
+                mask = np.array(mask)
+            self.masks[img_index] = mask
+        else:
+            mask = self.masks[img_index]
         # Return mask, and array of class IDs of each instance. Since we have
         # one class ID, we return an array of ones
         return mask, np.ones([mask.shape[-1]], dtype=np.int32)
-
-    def image_reference(self, image_id):
-        """Return the path of the image."""
-        info = self.image_info[image_id]
-        if info["source"] == "hippocampus":
-            return info["id"]
-        else:
-            super(self.__class__, self).image_reference(image_id)
 
 
 class HippocampusSubset(utils.Dataset):
@@ -130,7 +102,7 @@ class HippocampusSubset(utils.Dataset):
         # Add classes. We have one class.
         # Naming the dataset nucleus, and the class nucleus
         self.add_class("hippocampus", 1, "nucleus")
-        self.source_class_ids = {'hippocampus':  1}
+        self.source_class_ids = {'hippocampus': 1}
 
         # Add images
         for image_id, _ in enumerate(self.image_ids):
@@ -140,14 +112,14 @@ class HippocampusSubset(utils.Dataset):
                 path=None)
 
     def load_image(self, image_id):
-        return self.dataset.get_crop(self.dataset._images[self.subset][image_id])
+        return self.dataset.get_image(self.dataset._subsets[self.subset][image_id])
 
     def load_mask(self, image_id):
-        return self.dataset.get_mask(self.dataset._images[self.subset][image_id])
+        return self.dataset.get_mask(self.dataset._subsets[self.subset][image_id])
 
     @property
     def image_ids(self):
-        return list(range(len(self.dataset._images[self.subset])))
+        return list(range(len(self.dataset._subsets[self.subset])))
 
     def image_reference(self, image_id):
         """Return the path of the image."""
@@ -159,11 +131,12 @@ class HippocampusSubset(utils.Dataset):
 
 
 if __name__ == '__main__':
-    ds = HippocampusDataset.create('images/hippocampus/crops', 'images/hippocampus/labeled_crops')
+    ds = HippocampusDataset('/Users/david/study/openu/thesis/hipposeg/combined/images',
+                            '/Users/david/study/openu/thesis/hipposeg/combined/images/David2-Proc1.json')
     train = ds.get_subset('train')
 
     image_ids = train.image_ids
     for image_id in image_ids:
         image = train.load_image(image_id)
         mask, class_ids = train.load_mask(image_id)
-        # visualize.display_top_masks(image, mask, class_ids, ['', 'cell'], limit=1)
+        visualize.display_top_masks(image, mask, class_ids, ['', 'cell'], limit=1)
