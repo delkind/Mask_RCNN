@@ -36,6 +36,7 @@ class HippocampusDataset:
         self.crop_size = crop_size
         valid_images = [k for (k, v) in self.project['_via_img_metadata'].items() if v['regions']]
         self.images = [os.path.join(image_dir, self.project['_via_img_metadata'][x]['filename']) for x in valid_images]
+        self.shapes = [skimage.io.imread(img).shape for img in self.images]
         self.masks = [self.project['_via_img_metadata'][x]['regions'] for x in valid_images]
         ids = range(len(self.images))
         self._subsets = dict()
@@ -58,6 +59,7 @@ class HippocampusDataset:
                 image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
             if image.shape[-1] == 4:
                 image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
+            self.images[img_index] = image
         else:
             image = self.images[img_index]
 
