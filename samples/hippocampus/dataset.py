@@ -59,9 +59,10 @@ class HippocampusDataset:
                 image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
             if image.shape[-1] == 4:
                 image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
-            # image = cv2.resize(image, (320, 320))
             if image.shape[0] < image.shape[1]:
                 image = image[:, :image.shape[0], ...]
+            self.shapes[img_index] = image.shape[0:2]
+            image = cv2.resize(image, (320, 320))
             self.images[img_index] = image
         else:
             image = self.images[img_index]
@@ -83,6 +84,8 @@ class HippocampusDataset:
                 layer = np.zeros((shape[0], shape[1]), dtype=np.int8)
                 polygon = np.array([[[x, y] for (x, y) in (zip(region['shape_attributes']['all_points_x'],
                                                                region['shape_attributes']['all_points_y']))]])
+                ratio = np.array(list(shape[0:2])) / np.array(list(self.shapes[img_index]))
+                polygon = (polygon.astype(np.float32) * [ratio]).astype(int)
                 cv2.fillPoly(layer, polygon, 255)
                 mask += [layer != 0]
             if mask:
