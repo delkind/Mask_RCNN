@@ -173,7 +173,9 @@ def train(image_dir, project, crop_size, batch_size, iterations_per_epoch, valid
     dataset = HippocampusDataset(image_dir, project, validation_split, crop_size)
 
     train_subset = dataset.get_subset('train')
+    train_subset.prepare()
     val_subset = dataset.get_subset('val')
+    val_subset.prepare()
 
     import mrcnn.model as modellib
 
