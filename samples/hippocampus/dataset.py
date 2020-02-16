@@ -59,6 +59,9 @@ class HippocampusDataset:
                 image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
             if image.shape[-1] == 4:
                 image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
+            # image = cv2.resize(image, (320, 320))
+            if image.shape[0] < image.shape[1]:
+                image = image[:, :image.shape[0], ...]
             self.images[img_index] = image
         else:
             image = self.images[img_index]
